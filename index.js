@@ -104,6 +104,12 @@ async function run() {
             const result = await postCollection.find().sort({ postTime: -1 }).toArray();
             res.send(result);
         });
+        app.get('/posts/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await postCollection.findOne(query);
+            res.send(result);
+          });
 
 
 
