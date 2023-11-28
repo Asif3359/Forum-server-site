@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 require('dotenv').config();
 const app = express();
+const SSLCommerzPayment = require('sslcommerz-lts')
 
 const port = process.env.PORT || 5000;
 
@@ -14,6 +15,7 @@ app.use(express.json());
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const SslCommerzPayment = require("sslcommerz-lts/api/payment-controller");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.7ylhegt.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -25,6 +27,11 @@ const client = new MongoClient(uri, {
     }
 });
 
+
+const store_id = process.env.PAYMENT_ID
+const store_passwd = process.env.STORE_PASS
+const is_live = false //true for live, false for sandbox
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -32,6 +39,8 @@ async function run() {
         // Send a ping to confirm a successful connection
         const userCollection = client.db("forum").collection("users");
         const postCollection = client.db("forum").collection("posts");
+        const memberCollection = client.db("forum").collection("members");
+        const searchTextCollection = client.db("forum").collection("searchText");
 
 
 
@@ -97,6 +106,27 @@ async function run() {
         app.post('/posts', async (req, res) => {
             const post = req.body;
             const result = await postCollection.insertOne(post);
+            res.send(result);
+        });
+
+
+
+        // searchText
+        app.post('/searchText', async (req, res) => {
+            const post = req.body;
+            console.log(post)
+            const result = await searchTextCollection.insertOne(post);
+            res.send(result);
+        });
+
+
+        // searchText
+        app.get('/searchText', async (req, res) => {
+            const result = await searchTextCollection.aggregate([
+                { $group: { _id: '$searchText', count: { $sum: 1 } } },
+                { $sort: { count: -1 } },
+                { $limit: 5 },
+            ]).toArray();
             res.send(result);
         });
         // get 
@@ -257,28 +287,100 @@ async function run() {
         });
 
 
-        // app.get("/posts", async (req, res) => {
-
-        // })
+        const tran_id = new ObjectId().toString();
 
 
-        // try {
-        //     const result = await postCollection.aggregate([
-        //         {
-        //             $addFields: {
-        //                 voteDifference: { $subtract: ['$upVote', '$downVote'] }
-        //             }
-        //         },
-        //         {
-        //             $sort: { voteDifference: -1 } // Sort in descending order based on the voteDifference
-        //         }
-        //     ]).toArray();
+        app.post('/member', async (req, res) => {
+            const email = req.query.email
+            // console.log(email);
+            const paymentInfo = req.body;
+            let totalAmount;
+            if (paymentInfo.badgeType === 'gold') {
+                totalAmount = 100;
+            }
+            else if (paymentInfo.badgeType === 'diamond') {
+                totalAmount = 500;
+            }
+            else {
+                res.send({ message: "please Select Your" });
+            }
+            const data = {
+                total_amount: totalAmount,
+                currency: 'BDT',
+                tran_id: tran_id, // use unique tran_id for each api call
+                success_url: `http://localhost:5000/users/members/${email}/${tran_id}`,
+                fail_url: 'http://localhost:3030/fail',
+                cancel_url: 'http://localhost:3030/cancel',
+                ipn_url: 'http://localhost:3030/ipn',
+                shipping_method: 'Courier',
+                product_name: 'Computer.',
+                product_category: 'Electronic',
+                product_profile: 'general',
+                cus_name: paymentInfo.userName,
+                cus_email: paymentInfo.userEmail,
+                cus_add1: paymentInfo.address,
+                cus_add2: 'Dhaka',
+                cus_city: 'Dhaka',
+                cus_state: 'Dhaka',
+                cus_postcode: '1000',
+                cus_country: 'Bangladesh',
+                cus_phone: paymentInfo.paymentNumber,
+                cus_fax: '01711111111',
+                ship_name: 'Customer Name',
+                ship_add1: 'Dhaka',
+                ship_add2: 'Dhaka',
+                ship_city: 'Dhaka',
+                ship_state: 'Dhaka',
+                ship_postcode: 1000,
+                ship_country: 'Bangladesh',
+            };
+            // console.log(data);
+            const sslcz = new SslCommerzPayment(store_id, store_passwd, is_live)
+            sslcz.init(data).then(apiResponse => {
+                // Redirect the user to payment gateway
+                let GatewayPageURL = apiResponse.GatewayPageURL
+                res.send({ url: GatewayPageURL });
+                const members = {
+                    cus_name: paymentInfo.userName,
+                    cus_email: paymentInfo.userEmail,
+                    cus_add1: paymentInfo.address,
+                    cus_phone: paymentInfo.paymentNumber,
+                    badgeType: paymentInfo.badgeType,
+                    paymentDate: paymentInfo.paymentDate,
+                    paidStatus: false,
+                    tranjectionId: tran_id
+                }
+                const result = memberCollection.insertOne(members)
+                console.log('Redirecting to: ', GatewayPageURL)
+            })
+            app.post('/users/members/:email/:tran_id', async (req, res) => {
+                const email = req.params.email;
+                const tran_id = req.params.tran_id;
 
-        //     res.send(result);
-        // } catch (error) {
-        //     console.error('Error fetching and sorting posts:', error);
-        //     res.status(500).json({ error: 'Internal Server Error' });
-        // }
+
+                const result = await memberCollection.updateOne(
+                    { tranjectionId: tran_id },
+                    {
+                        $set: {
+                            paidStatus: true
+                        },
+                    }
+                );
+                if (result.modifiedCount > 0) {
+                    res.redirect(`http://localhost:5173/payment/success/${tran_id}`);
+                }
+
+
+            })
+        })
+
+        app.get('/search', async (req, res) => {
+            //    console.log("hi");
+            const { tag } = req.query;
+            console.log(tag);
+            const result = await postCollection.find({ postTag: { $regex: `^${tag}`, $options: 'i' } }).toArray();
+            res.send(result);
+        });
 
 
 
