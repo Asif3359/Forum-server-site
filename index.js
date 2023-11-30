@@ -41,12 +41,19 @@ async function run() {
         const postCollection = client.db("forum").collection("posts");
         const memberCollection = client.db("forum").collection("members");
         const searchTextCollection = client.db("forum").collection("searchText");
+        const ReportCollection = client.db("forum").collection("report");
 
 
 
 
         app.get('/users', async (req, res) => {
             const result = await userCollection.find().toArray();
+            res.send(result);
+        });
+        app.get('/users/:email', async (req, res) => {
+            const email = req.params.email
+            const query = { email: email };
+            const result = await userCollection.findOne(query);
             res.send(result);
         });
 
@@ -90,11 +97,30 @@ async function run() {
             const result = await userCollection.updateOne(filter, updatedDoc);
             res.send(result);
         })
+        app.put('/users', async (req, res) => {
+            const email = req.query.email;
+            const filter = { email: email };
+
+            const updatedDoc = {
+                $set: {
+                    badgeType: req.body.badgeType
+                }
+            }
+            const result = await userCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+        })
 
         app.delete('/users/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await userCollection.deleteOne(query);
+            res.send(result);
+        });
+
+        app.delete('/posts/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await postCollection.deleteOne(query);
             res.send(result);
         });
 
@@ -106,6 +132,12 @@ async function run() {
         app.post('/posts', async (req, res) => {
             const post = req.body;
             const result = await postCollection.insertOne(post);
+            res.send(result);
+        });
+        // post 
+        app.post('/reports', async (req, res) => {
+            const post = req.body;
+            const result = await ReportCollection.insertOne(post);
             res.send(result);
         });
 
@@ -131,40 +163,44 @@ async function run() {
         });
         // get 
         app.get('/posts', async (req, res) => {
-            try {
-                const allPost = await postCollection.find().sort({ postTime: -1 }).toArray();
+            const allPost = await postCollection.find().sort({ postTime: -1 }).toArray();
 
-                const page = parseInt(req.query.page) || 1;
-                const limit = parseInt(req.query.limit) || 10; // Set a default limit if not provided
-                //   const page =  1;
-                //   const limit =  5; 
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const email = req.query.email || null;
+            const tag = req.query.tag || null;
 
-                const startIndex = (page - 1) * limit;
-                const endIndex = page * limit;
+            const startIndex = (page - 1) * limit;
+            const endIndex = page * limit;
 
-                const results = {};
-                results.totalPost = allPost.length;
-                results.pageCount = Math.ceil(allPost.length / limit);
+            const results = {};
+            results.totalPost = allPost.length;
+            results.pageCount = Math.ceil(allPost.length / limit);
 
-                if (endIndex < allPost.length) {
-                    results.next = {
-                        page: page + 1,
-                    };
-                }
-
-                if (startIndex > 0) {
-                    results.prev = {
-                        page: page - 1,
-                    };
-                }
-
-                results.result = await postCollection.find().sort({ postTime: -1 }).skip(startIndex).limit(limit).toArray();
-                res.json(results);
-            } catch (error) {
-                console.error(error);
-                res.status(500).send('Internal Server Error');
+            if (endIndex < allPost.length) {
+                results.next = {
+                    page: page + 1,
+                };
             }
+
+            if (startIndex > 0) {
+                results.prev = {
+                    page: page - 1,
+                };
+            }
+
+            let query = {};
+            if (email) {
+                query = { authorEmail: email };
+            }
+            if (tag) {
+                query = { postTag: { $regex: `^${tag}`, $options: 'i' } }
+            }
+
+            results.result = await postCollection.find(query).sort({ postTime: -1 }).skip(startIndex).limit(limit).toArray();
+            res.json(results);
         });
+
         app.get('/posts/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
@@ -374,13 +410,13 @@ async function run() {
             })
         })
 
-        app.get('/search', async (req, res) => {
-            //    console.log("hi");
-            const { tag } = req.query;
-            console.log(tag);
-            const result = await postCollection.find({ postTag: { $regex: `^${tag}`, $options: 'i' } }).toArray();
-            res.send(result);
-        });
+        // app.get('/search', async (req, res) => {
+        //     //    console.log("hi");
+        //     const { tag } = req.query;
+        //     console.log(tag);
+        //     const result = await postCollection.find({ postTag: { $regex: `^${tag}`, $options: 'i' } }).toArray();
+        //     res.send(result);
+        // });
 
 
 
