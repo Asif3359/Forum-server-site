@@ -42,6 +42,7 @@ async function run() {
         const memberCollection = client.db("forum").collection("members");
         const searchTextCollection = client.db("forum").collection("searchText");
         const ReportCollection = client.db("forum").collection("report");
+        const feedbackCollection = client.db("forum").collection("feedback");
 
 
 
@@ -138,6 +139,18 @@ async function run() {
         app.post('/reports', async (req, res) => {
             const post = req.body;
             const result = await ReportCollection.insertOne(post);
+            res.send(result);
+        });
+        // post 
+        app.post('/feedback', async (req, res) => {
+            const post = req.body;
+            const result = await feedbackCollection.insertOne(post);
+            res.send(result);
+        });
+    //    get
+        app.get('/reports', async (req, res) => {
+            // const post = req.body;
+            const result = await ReportCollection.find().toArray();
             res.send(result);
         });
 
