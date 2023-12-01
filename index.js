@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 require('dotenv').config();
 const app = express();
+const jwt = require('jsonwebtoken');
 const SSLCommerzPayment = require('sslcommerz-lts')
 
 const port = process.env.PORT || 5000;
@@ -44,15 +45,58 @@ async function run() {
         const ReportCollection = client.db("forum").collection("report");
         const feedbackCollection = client.db("forum").collection("feedback");
         const announcementCollection = client.db("forum").collection("announcement");
+        const commentCollection = client.db("forum").collection("comment");
 
 
+
+        // -----------------------------------------------
+
+
+        app.post('/jwt', async (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+            res.send({ token });
+        })
+
+        // middlewares ----------------------------------
+        const verifyToken= (req, res, next) => {
+            // console.log('inside verify token', req.headers.authorization);
+            if (!req.headers.authorization) {
+                return res.status(401).send({ message: 'unauthorized access' });
+            }
+            const token = req.headers.authorization.split(' ')[1];
+            jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+                if (err) {
+                    return res.status(401).send({ message: 'unauthorized access' })
+                }
+                req.decoded = decoded;
+                next();
+            })
+        }
+
+        // use verify admin after---------------------------
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email };
+            const user = await userCollection.findOne(query);
+            const isAdmin = user?.role === 'admin';
+            if (!isAdmin) {
+                return res.status(403).send({ message: 'forbidden access' });
+            }
+            next();
+        }
+
+
+
+
+        // --------------------------------------------------------
 
 
         app.get('/users', async (req, res) => {
             const result = await userCollection.find().toArray();
             res.send(result);
         });
-        app.get('/users/:email', async (req, res) => {
+        app.get('/users/:email',async (req, res) => {
             const email = req.params.email
             const query = { email: email };
             const result = await userCollection.findOne(query);
@@ -62,10 +106,9 @@ async function run() {
         app.get('/users/admin/:email', async (req, res) => {
             const email = req.params.email;
 
-            if (email !== req.decoded.email) {
-                return res.status(403).send({ message: 'forbidden access' })
-            }
-
+            // if (email !== req.decoded.email) {
+            //     return res.status(403).send({ message: 'forbidden access' })
+            // }
             const query = { email: email };
             const user = await userCollection.findOne(query);
             let admin = false;
@@ -151,6 +194,17 @@ async function run() {
             const result = await ReportCollection.insertOne(report);
             res.send(result);
         });
+        // comment 
+        app.post('/comment', async (req, res) => {
+            const comment = req.body;
+            const result = await commentCollection.insertOne(comment);
+            res.send(result);
+        });
+        // comment 
+        app.get('/comment', async (req, res) => {
+            const result = await commentCollection.find().toArray();
+            res.send(result);
+        });
         // post 
         app.post('/feedback', async (req, res) => {
             const feedback = req.body;
@@ -160,7 +214,7 @@ async function run() {
         app.get('/feedback/:email', async (req, res) => {
             const email = req.params.email
             if (!email) {
-                res.status(401).send({message:"unAuth"})
+                res.status(401).send({ message: "unAuth" })
             }
             const query = {
                 reportOnEmail: email
