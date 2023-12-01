@@ -43,6 +43,7 @@ async function run() {
         const searchTextCollection = client.db("forum").collection("searchText");
         const ReportCollection = client.db("forum").collection("report");
         const feedbackCollection = client.db("forum").collection("feedback");
+        const announcementCollection = client.db("forum").collection("announcement");
 
 
 
@@ -135,19 +136,39 @@ async function run() {
             const result = await postCollection.insertOne(post);
             res.send(result);
         });
+        app.post('/announcement', async (req, res) => {
+            const announcement = req.body;
+            const result = await announcementCollection.insertOne(announcement);
+            res.send(result);
+        });
+        app.get('/announcement', async (req, res) => {
+            const result = await announcementCollection.find().sort({ announcementDate: -1 }).toArray();;
+            res.send(result);
+        });
         // post 
         app.post('/reports', async (req, res) => {
-            const post = req.body;
-            const result = await ReportCollection.insertOne(post);
+            const report = req.body;
+            const result = await ReportCollection.insertOne(report);
             res.send(result);
         });
         // post 
         app.post('/feedback', async (req, res) => {
-            const post = req.body;
-            const result = await feedbackCollection.insertOne(post);
+            const feedback = req.body;
+            const result = await feedbackCollection.insertOne(feedback);
             res.send(result);
         });
-    //    get
+        app.get('/feedback/:email', async (req, res) => {
+            const email = req.params.email
+            if (!email) {
+                res.status(401).send({message:"unAuth"})
+            }
+            const query = {
+                reportOnEmail: email
+            }
+            const result = await feedbackCollection.find(query).toArray();
+            res.send(result);
+        });
+        //    get
         app.get('/reports', async (req, res) => {
             // const post = req.body;
             const result = await ReportCollection.find().toArray();
@@ -158,9 +179,9 @@ async function run() {
 
         // searchText
         app.post('/searchText', async (req, res) => {
-            const post = req.body;
-            console.log(post)
-            const result = await searchTextCollection.insertOne(post);
+            const searchText = req.body;
+            console.log(searchText)
+            const result = await searchTextCollection.insertOne(searchText);
             res.send(result);
         });
 
@@ -218,6 +239,10 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await postCollection.findOne(query);
+            res.send(result);
+        });
+        app.get('/totalPost', async (req, res) => {
+            const result = await postCollection.find().toArray();
             res.send(result);
         });
         app.put('/posts/:id', async (req, res) => {
