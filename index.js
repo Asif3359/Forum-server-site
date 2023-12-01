@@ -113,7 +113,7 @@ async function run() {
             const user = await userCollection.findOne(query);
             let admin = false;
             if (user) {
-                admin = user?.role === 'admin';
+                admin = user?.role == 'admin';
             }
             res.send({ admin });
         })
@@ -495,20 +495,12 @@ async function run() {
                     }
                 );
                 if (result.modifiedCount > 0) {
-                    res.redirect(`http://localhost:5173/payment/success/${tran_id}`);
+                    res.redirect(`https://assignment-12-786be.web.app/payment/success/${tran_id}`);
                 }
 
 
             })
         })
-
-        // app.get('/search', async (req, res) => {
-        //     //    console.log("hi");
-        //     const { tag } = req.query;
-        //     console.log(tag);
-        //     const result = await postCollection.find({ postTag: { $regex: `^${tag}`, $options: 'i' } }).toArray();
-        //     res.send(result);
-        // });
 
 
 
