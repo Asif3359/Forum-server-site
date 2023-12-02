@@ -36,7 +36,7 @@ const is_live = false //true for live, false for sandbox
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
         // Send a ping to confirm a successful connection
         const userCollection = client.db("forum").collection("users");
         const postCollection = client.db("forum").collection("posts");
@@ -59,7 +59,7 @@ async function run() {
         })
 
         // middlewares ----------------------------------
-        const verifyToken= (req, res, next) => {
+        const verifyToken = (req, res, next) => {
             // console.log('inside verify token', req.headers.authorization);
             if (!req.headers.authorization) {
                 return res.status(401).send({ message: 'unauthorized access' });
@@ -96,9 +96,12 @@ async function run() {
             const result = await userCollection.find().toArray();
             res.send(result);
         });
-        app.get('/users/:email',async (req, res) => {
+        app.get('/users/:email', async (req, res) => {
             const email = req.params.email
-            const query = { email: email };
+            let query;
+            if (email) {
+                query = { email: email };
+            }
             const result = await userCollection.findOne(query);
             res.send(result);
         });
@@ -174,10 +177,30 @@ async function run() {
 
 
         // post 
-        app.post('/posts', async (req, res) => {
+        app.post('/posts/:limit/:badgeType', async (req, res) => {
+            const limit = parseInt(req.params.limit);
+            const badgeType = req.params.badgeType;
             const post = req.body;
-            const result = await postCollection.insertOne(post);
-            res.send(result);
+            let result;
+            console.log(limit);
+
+            if (badgeType == 'Bronze' && limit < 5) {
+                result = await postCollection.insertOne(post);
+            }
+            else if (badgeType == 'diamond' && limit < 50) {
+                result = await postCollection.insertOne(post);
+            }
+            else if (badgeType == 'gold' && limit < 100) {
+                result = await postCollection.insertOne(post);
+            }
+            else {
+                result = null;
+            }
+            if (result) {
+                res.status(201).send({ message: 'Post created successfully', result });
+            } else {
+                res.status(200).send({ message: 'POST request received, but no data saved.',error:"200" });
+            }
         });
         app.post('/announcement', async (req, res) => {
             const announcement = req.body;
@@ -251,12 +274,22 @@ async function run() {
         });
         // get 
         app.get('/posts', async (req, res) => {
-            const allPost = await postCollection.find().sort({ postTime: -1 }).toArray();
-
+            
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const email = req.query.email || null;
             const tag = req.query.tag || null;
+
+            let query = {};
+            if (email) {
+                query = { authorEmail: email };
+            }
+            if (tag) {
+                query = { postTag: { $regex: `^${tag}`, $options: 'i' } }
+            }
+
+            const allPost = await postCollection.find(query).sort({ postTime: -1 }).toArray();
+
 
             const startIndex = (page - 1) * limit;
             const endIndex = page * limit;
@@ -277,13 +310,7 @@ async function run() {
                 };
             }
 
-            let query = {};
-            if (email) {
-                query = { authorEmail: email };
-            }
-            if (tag) {
-                query = { postTag: { $regex: `^${tag}`, $options: 'i' } }
-            }
+          
 
             results.result = await postCollection.find(query).sort({ postTime: -1 }).skip(startIndex).limit(limit).toArray();
             res.json(results);
@@ -293,6 +320,12 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await postCollection.findOne(query);
+            res.send(result);
+        });
+        app.get('/usersPosts/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { authorEmail: email }
+            const result = await postCollection.find(query).toArray();
             res.send(result);
         });
         app.get('/totalPost', async (req, res) => {
@@ -436,7 +469,7 @@ async function run() {
                 total_amount: totalAmount,
                 currency: 'BDT',
                 tran_id: tran_id, // use unique tran_id for each api call
-                success_url: `http://localhost:5000/users/members/${email}/${tran_id}`,
+                success_url: `https://blood-donation-server-beta.vercel.app/users/members/${email}/${tran_id}`,
                 fail_url: 'http://localhost:3030/fail',
                 cancel_url: 'http://localhost:3030/cancel',
                 ipn_url: 'http://localhost:3030/ipn',
