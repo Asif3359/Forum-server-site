@@ -46,6 +46,8 @@ async function run() {
         const feedbackCollection = client.db("forum").collection("feedback");
         const announcementCollection = client.db("forum").collection("announcement");
         const commentCollection = client.db("forum").collection("comment");
+        const usersFeedbackCollection = client.db("forum").collection("usersFeedBack");
+        const usersFeedbackReplayCollection = client.db("forum").collection("FeedBackReplay");
 
 
 
@@ -199,7 +201,7 @@ async function run() {
             if (result) {
                 res.status(201).send({ message: 'Post created successfully', result });
             } else {
-                res.status(200).send({ message: 'POST request received, but no data saved.',error:"200" });
+                res.status(200).send({ message: 'POST request received, but no data saved.', error: "200" });
             }
         });
         app.post('/announcement', async (req, res) => {
@@ -245,6 +247,34 @@ async function run() {
             const result = await feedbackCollection.find(query).toArray();
             res.send(result);
         });
+
+        app.post('/usersFeedback', async (req, res) => {
+            const feedback = req.body;
+            const result = await usersFeedbackCollection.insertOne(feedback);
+            res.send(result);
+        });
+        app.post('/feedbackReplay', async (req, res) => {
+            const feedback = req.body;
+            const result = await usersFeedbackReplayCollection.insertOne(feedback);
+            res.send(result);
+        });
+        app.get('/usersFeedback', async (req, res) => {
+            const result = await usersFeedbackCollection.find().toArray();
+            res.send(result);
+        });
+        app.get('/feedbackReplay/:email', async (req, res) => {
+            const email = req.params.email
+            // console.log(email)
+            if (!email) {
+                res.status(401).send({ message: "unAuth" })
+            }
+            const query = {
+                fedEamil: email
+            }
+
+            const result = await usersFeedbackReplayCollection.find(query).toArray();
+            res.send(result);
+        });
         //    get
         app.get('/reports', async (req, res) => {
             // const post = req.body;
@@ -274,7 +304,7 @@ async function run() {
         });
         // get 
         app.get('/posts', async (req, res) => {
-            
+
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const email = req.query.email || null;
@@ -310,7 +340,7 @@ async function run() {
                 };
             }
 
-          
+
 
             results.result = await postCollection.find(query).sort({ postTime: -1 }).skip(startIndex).limit(limit).toArray();
             res.json(results);
